@@ -80,7 +80,7 @@ const generateChatID = async (currentToken, model) => {
     // 为了保持与 sendChatRequest 逻辑的一致性，我们也需要为 generateChatID 获取一个账户和代理
     // 但这里我们复用传入的 currentToken 对应的账户信息
     // 从 accountManager 获取当前 token 对应的账户邮箱，以便在失败时处理代理
-    const accountInfo = accountManager.getAccountByEmail(accountManager.accountTokens.find(acc => acc.token === currentToken)?.email) || {};
+    const accountInfo = accountManager.accountTokens.find(acc => acc.token === currentToken) || {};
     const email = accountInfo.email;
     const proxy = accountInfo.proxy;
 
