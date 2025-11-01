@@ -1,5 +1,5 @@
 const config = require('../config/index.js')
-const DataPersistence = require('./data-persistence')
+const dataPersistence = require('./data-persistence')
 const TokenManager = require('./token-manager')
 const AccountRotator = require('./account-rotator')
 const { logger } = require('./logger')
@@ -10,7 +10,7 @@ const { logger } = require('./logger')
 class Account {
     constructor() {
         // 初始化各个管理器
-        this.dataPersistence = new DataPersistence()
+        this.dataPersistence = dataPersistence
         this.tokenManager = new TokenManager()
         this.accountRotator = new AccountRotator()
 
@@ -38,37 +38,27 @@ class Account {
      */
     async _initialize() {
         try {
-            // 初始化 ProxyManager 并应用新的智能加载策略
+            // 初始化 ProxyManager
             if (config.socks5Proxies.length > 0) {
                 const ProxyManager = require('./proxy-manager');
-                this.proxyManager = new ProxyManager();
+                this.proxyManager = new ProxyManager(this.dataPersistence);
 
-                // 1. 加载持久化的代理绑定
                 const savedBindings = await this.dataPersistence.loadProxyBindings();
-                this.proxyManager.initialize(savedBindings);
-
-                // 2. 验证已绑定的代理，并处理重复绑定
-                const accountsToReassign = await this.proxyManager.validateAndRebalanceBindings();
-
-                // 3. 为需要重新分配的账户分配新代理
-                if (accountsToReassign.size > 0) {
-                    logger.info(`发现 ${accountsToReassign.size} 个账户需要重新分配代理...`, 'PROXY');
-                    for (const [email, reason] of accountsToReassign.entries()) {
-                        logger.info(`正在为 ${email} 重新分配代理 (原因: ${reason})`, 'PROXY');
-                        const newProxy = await this.proxyManager.assignProxy(email);
-                        if (newProxy) {
-                            await this.dataPersistence.saveProxyBinding(email, newProxy);
-                        }
-                    }
-                }
-                
-                logger.success(`代理管理器验证和重平衡完成`, 'PROXY');
+                const savedStatuses = await this.dataPersistence.loadProxyStatuses();
+                await this.proxyManager.initialize(savedStatuses, savedBindings);
             } else {
                 logger.info('未配置 SOCKS5 代理，将直接连接', 'PROXY');
             }
 
             // 加载账户信息
             await this.loadAccountTokens()
+
+            // 为已加载的账户对象附加代理信息
+            if (this.proxyManager) {
+                this.accountTokens.forEach(acc => {
+                    acc.proxy = this.proxyManager.getProxyForAccount(acc.email);
+                });
+            }
 
             // 设置定期刷新令牌
             if (config.autoRefresh) {
@@ -609,10 +599,11 @@ class Account {
 
             let assignedProxy = null;
             if (this.proxyManager) {
+                logger.info(`正在为新添加的账户 ${email} 分配代理...`, 'PROXY');
                 assignedProxy = await this.proxyManager.assignProxy(email);
                 if (assignedProxy) {
-                    // 持久化代理绑定
                     await this.dataPersistence.saveProxyBinding(email, assignedProxy);
+                    await this.proxyManager.persistStatuses(); // 保存可能更新的代理状态
                 }
             }
 
@@ -622,6 +613,11 @@ class Account {
 
             if (!token) {
                 logger.error(`账户 ${email} 登录失败，无法添加`, 'ACCOUNT');
+                // 如果登录失败，可能代理有问题，标记一下
+                if (assignedProxy) {
+                    this.proxyManager.markProxyAsFailed(assignedProxy);
+                    await this.proxyManager.persistStatuses();
+                }
                 return false;
             }
 
@@ -771,7 +767,7 @@ class Account {
         this.proxyManager.markProxyAsFailed(proxyUrl)
 
         // 尝试为账户重新分配一个新代理
-        const newProxy = this.proxyManager.assignProxy(email, true) // forceNew = true
+        const newProxy = await this.proxyManager.assignProxy(email, true) // forceNew = true
         if (newProxy) {
             // 解析新代理URL以获取IP
             let newProxyHostForLog = newProxy;

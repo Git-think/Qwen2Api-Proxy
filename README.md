@@ -4,7 +4,7 @@
 
 # 🚀 Qwen-Proxy
 
-[![Version](https://img.shields.io/badge/version-2025.11.01.00.00-blue.svg)](https://github.com/Git-think/Qwen2Api-Proxy)
+[![Version](https://img.shields.io/badge/version-2025.11.02.00.33-blue.svg)](https://github.com/Git-think/Qwen2Api-Proxy)
 [![Node.js](https://img.shields.io/badge/Node.js-18+-green.svg)](https://nodejs.org/)
 [![Docker](https://img.shields.io/badge/Docker-supported-blue.svg)](https://hub.docker.com/r/Git-think/qwen2api-proxy)
 [![Binary](https://img.shields.io/badge/Binary-Available-orange.svg)](https://github.com/Git-think/Qwen2Api-Proxy/releases)
@@ -143,13 +143,16 @@ SOCKS5_PROXIES=socks5://user1:pass1@host1:port1,socks5://user2:pass2@host2:port2
 ```
 
 **功能说明:**
-- **按需测试**: 代理不再于启动时全部测试，而是在需要时（如首次分配、验证绑定）才进行测试，大幅提升启动速度。
-- **智能分配**: 采用更智能的分配策略，优先为账户分配完全空闲的代理，其次是未测试的代理，最后才在已使用的代理中选择负载最低的进行共享。
-- **启动时验证和重平衡**: 应用启动时会自动验证已持久化的账户-代理绑定关系。如果绑定的代理失效，或多个账户绑定了同一个代理且存在空闲代理，系统会自动为受影响的账户重新分配新的代理。
-- **持久化绑定**: 代理与账号的绑定关系可保存在内存、本地文件或 Redis 中，确保账号使用固定的代理。
-- **故障转移**: 请求失败时，系统会自动验证当前代理的可用性。若代理失效，则为该账号重新分配一个新代理，并更新绑定关系。
+- **状态持久化**: 代理的状态（`untested`, `available`, `failed`）和账户绑定关系会被持久化到 `data/data.json` 中。
+- **极速启动**: 应用启动时直接从文件加载代理状态，无需进行网络测试，实现秒级启动。
+- **智能分配策略**:
+    - **P1**: 优先分配一个未被使用且状态为 `available` 的代理。
+    - **P2**: 其次，随机测试一个 `untested` 的代理。
+    - **P3**: 再次，随机尝试一个 `failed` 的代理，看其是否已恢复。
+    - **P4**: 最后，在所有 `available` 的代理中，选择分配账户最少的进行共享。
+- **按需测试**: 仅在需要为账户分配代理时，才会对选定的代理进行网络测试。
+- **故障转移**: 当一个账户的网络请求失败时，其使用的代理会被标记为 `failed`，并自动触发重新分配流程。
 - **日志优化**: 日志中会显示 `email (ProxyIP)` 格式，方便追踪。
-- **无代理回退**: 如果没有配置或没有可用的代理，系统会记录信息并直接连接，不会崩溃。
 
 **注意事项:**
 - 代理地址格式必须为 `socks5://user:pass@host:port`
