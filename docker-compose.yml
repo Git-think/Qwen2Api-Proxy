@@ -1,0 +1,41 @@
+services:
+  qwen2api:
+    container_name: qwen2api
+    image: rfym21/qwen2api:latest
+    restart: always
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    environment:
+      # 如果需要修改Docker暴露端口，请修改ports中的参数
+      # 示例(8080:3000) 则访问 http://localhost:8080
+      - SERVICE_PORT=3000
+      # API 密钥 (非必填)
+      # 如果需要使用多账户或使用内置账户，请填写
+      - API_KEY=sk-123456
+      # 监听地址(非必填)
+      - LISTEN_ADDRESS=
+      # PM2 多进程配置
+      # PM2进程数量: max(使用所有CPU核心), 数字(指定进程数量), 1(单进程)
+      # 注意: PM2集群模式下所有进程共用同一个端口
+      - PM2_INSTANCES=1
+      # PM2内存限制，超过此限制将自动重启进程
+      - PM2_MAX_MEMORY=1G
+      # 搜索信息展示模式
+      # table: 使用折叠块和表格展示
+      # text: 使用纯文本
+      - SEARCH_INFO_MODE=table
+      # 是否输出思考过程
+      - OUTPUT_THINK=true
+      # 简化模型映射 (true: 只返回基础模型, false: 返回完整模型列表)
+      - SIMPLE_MODEL_MAP=false
+      # redis 连接地址(如果使用redis模式，则必填，当redis使用tls时将redis://替换为rediss://)
+      - REDIS_URL=
+      # 数据保存模式
+      - DATA_SAVE_MODE=none
+      # 账号(如果使用redis和file模式，则不需要填写)
+      - ACCOUNTS=
+      # 图片缓存
+      - CACHE_MODE=default
