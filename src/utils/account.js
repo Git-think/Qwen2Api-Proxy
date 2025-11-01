@@ -93,6 +93,21 @@ class Account {
         try {
             this.accountTokens = await this.dataPersistence.loadAccounts()
 
+            // 首次启动时，如果data.json为空，则从.env初始化
+            if (this.accountTokens.length === 0 && process.env.ACCOUNTS) {
+                logger.info('检测到首次启动，正在从 .env 初始化账户...', 'ACCOUNT');
+                const accountsEnv = process.env.ACCOUNTS;
+                const accounts = accountsEnv.split(',').map(item => {
+                    const [email, password] = item.split(':');
+                    return { email, password };
+                });
+
+                for (const acc of accounts) {
+                    await this.addAccount(acc.email, acc.password);
+                }
+                logger.info(`成功从 .env 初始化 ${this.accountTokens.length} 个账户`, 'ACCOUNT');
+            }
+
             // 如果是环境变量模式，需要进行登录获取令牌
             if (config.dataSaveMode === 'none' && this.accountTokens.length > 0) {
                 await this._loginEnvironmentAccounts()
@@ -594,9 +609,8 @@ class Account {
 
             let assignedProxy = null;
             if (this.proxyManager) {
-                assignedProxy = this.proxyManager.assignProxy(email);
+                assignedProxy = await this.proxyManager.assignProxy(email);
                 if (assignedProxy) {
-                    logger.info(`为新账户 ${email} 分配代理: ${assignedProxy}`, 'PROXY');
                     // 持久化代理绑定
                     await this.dataPersistence.saveProxyBinding(email, assignedProxy);
                 }
