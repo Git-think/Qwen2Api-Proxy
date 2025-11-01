@@ -14,8 +14,18 @@ const accountsRouter = require('./routes/accounts.js')
 const settingsRouter = require('./routes/settings.js')
 
 if (config.dataSaveMode === 'file') {
-  if (!fs.existsSync(path.join(__dirname, '../data/data.json'))) {
-    fs.writeFileSync(path.join(__dirname, '../data/data.json'), JSON.stringify({"accounts": [] }, null, 2))
+  const dataPath = path.join(__dirname, '../data/data.json');
+  if (!fs.existsSync(dataPath)) {
+    const accountsEnv = process.env.ACCOUNTS;
+    let accounts = [];
+    if (accountsEnv) {
+      accounts = accountsEnv.split(',').map(item => {
+        const [email, password] = item.split(':');
+        return { email, password, token: null, expires: null };
+      });
+    }
+    fs.mkdirSync(path.dirname(dataPath), { recursive: true });
+    fs.writeFileSync(dataPath, JSON.stringify({ accounts }, null, 2));
   }
 }
 

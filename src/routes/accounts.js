@@ -70,15 +70,7 @@ router.post('/setAccount', adminKeyVerify, async (req, res) => {
       return res.status(409).json({ error: '账号已存在' })
     }
 
-    const authToken = await accountManager.login(email, password)
-    if (!authToken) {
-      return res.status(401).json({ error: '登录失败' })
-    }
-    // 解析JWT
-    const decoded = JwtDecode(authToken)
-    const expires = decoded.exp
-
-    const success = await saveAccounts(email, password, authToken, expires)
+    const success = await accountManager.addAccount(email, password);
 
     if (success) {
       res.status(200).json({

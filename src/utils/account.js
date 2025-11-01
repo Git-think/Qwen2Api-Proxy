@@ -538,10 +538,21 @@ class Account {
                 return false
             }
 
-            // 尝试登录获取令牌
-            const token = await this.tokenManager.login(email, password)
+            // 为账户分配代理
+            let assignedProxy = null;
+            if (this.proxyManager) {
+                assignedProxy = this.proxyManager.assignProxy(email);
+                logger.info(`为新账户 ${email} 分配代理: ${assignedProxy}`, 'PROXY');
+            }
+
+            // 在登录前设置当前代理，用于日志显示
+            global.currentLoginProxy = assignedProxy;
+            const token = await this.tokenManager.login(email, password);
+            // 登录后清除全局代理变量
+            global.currentLoginProxy = null;
+
             if (!token) {
-                logger.error(`账户 ${email} 登录失败，无法添加`, 'ACCOUNT')
+                logger.error(`账户 ${email} 登录失败，无法添加`, 'ACCOUNT');
                 return false
             }
 
