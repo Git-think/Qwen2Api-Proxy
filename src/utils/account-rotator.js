@@ -32,26 +32,25 @@ class AccountRotator {
   }
 
   /**
-   * 获取下一个可用的账户令牌
-   * @returns {string|null} 账户令牌或null
+   * 获取下一个可用的账户对象
+   * @returns {Object|null} 账户对象或null
    */
-  getNextToken() {
+  getNextAccount() {
     if (this.accounts.length === 0) {
-      logger.error('没有可用的账户', 'ACCOUNT')
-      return null
+      logger.error('没有可用的账户', 'ACCOUNT');
+      return null;
     }
 
-    const availableAccounts = this._getAvailableAccounts()
+    const availableAccounts = this._getAvailableAccounts();
     if (availableAccounts.length === 0) {
-      logger.warn('所有账户都不可用，使用轮询策略', 'ACCOUNT')
-      return this._getTokenByRoundRobin()
+      logger.warn('所有账户都不可用，使用轮询策略', 'ACCOUNT');
+      return this._getAccountByRoundRobin();
     }
 
-    // 从可用账户中选择最少使用的
-    const selectedAccount = this._selectLeastUsedAccount(availableAccounts)
-    this._recordUsage(selectedAccount.email)
+    const selectedAccount = this._selectLeastUsedAccount(availableAccounts);
+    this._recordUsage(selectedAccount.email);
     
-    return selectedAccount.token
+    return selectedAccount;
   }
 
   /**
@@ -59,20 +58,20 @@ class AccountRotator {
    * @param {string} email - 邮箱地址
    * @returns {string|null} 账户令牌或null
    */
-  getTokenByEmail(email) {
-    const account = this.accounts.find(acc => acc.email === email)
+  getAccountByEmail(email) {
+    const account = this.accounts.find(acc => acc.email === email);
     if (!account) {
-      logger.error(`未找到邮箱为 ${email} 的账户`, 'ACCOUNT')
-      return null
+      logger.error(`未找到邮箱为 ${email} 的账户`, 'ACCOUNT');
+      return null;
     }
 
     if (!this._isAccountAvailable(account)) {
-      logger.warn(`账户 ${email} 当前不可用`, 'ACCOUNT')
-      return null
+      logger.warn(`账户 ${email} 当前不可用`, 'ACCOUNT');
+      return null;
     }
 
-    this._recordUsage(email)
-    return account.token
+    this._recordUsage(email);
+    return account;
   }
 
   /**
@@ -182,25 +181,24 @@ class AccountRotator {
    * @returns {string|null} 账户令牌或null
    * @private
    */
-  _getTokenByRoundRobin() {
+  _getAccountByRoundRobin() {
     if (this.currentIndex >= this.accounts.length) {
-      this.currentIndex = 0
+      this.currentIndex = 0;
     }
 
-    const account = this.accounts[this.currentIndex]
-    this.currentIndex++
+    const account = this.accounts[this.currentIndex];
+    this.currentIndex++;
 
     if (account && account.token) {
-      this._recordUsage(account.email)
-      return account.token
+      this._recordUsage(account.email);
+      return account;
     }
 
-    // 如果当前账户无效，尝试下一个
     if (this.currentIndex < this.accounts.length) {
-      return this._getTokenByRoundRobin()
+      return this._getAccountByRoundRobin();
     }
 
-    return null
+    return null;
   }
 
   /**

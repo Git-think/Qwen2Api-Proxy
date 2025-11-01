@@ -107,7 +107,17 @@ class DataPersistence {
     const fileContent = await fs.readFile(this.dataFilePath, 'utf-8')
     const data = JSON.parse(fileContent)
     
-    return data.accounts || []
+    const accounts = data.accounts || []
+    // 加载代理绑定并附加到账户对象
+    if (data.proxyBindings) {
+      accounts.forEach(acc => {
+        if (data.proxyBindings[acc.email]) {
+          acc.proxy = data.proxyBindings[acc.email];
+        }
+      });
+    }
+    
+    return accounts
   }
 
   /**

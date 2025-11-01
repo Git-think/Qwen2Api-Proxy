@@ -38,17 +38,31 @@ class Account {
      */
     async _initialize() {
         try {
-            // 初始化 ProxyManager 并测试代理
+            // 初始化 ProxyManager 并应用新的智能加载策略
             if (config.socks5Proxies.length > 0) {
                 const ProxyManager = require('./proxy-manager');
                 this.proxyManager = new ProxyManager();
-                await this.proxyManager.initialize(); // 这会测试所有代理
 
-                // 加载持久化的代理绑定
+                // 1. 加载持久化的代理绑定
                 const savedBindings = await this.dataPersistence.loadProxyBindings();
-                this.proxyManager.loadProxyAssignments(savedBindings);
+                this.proxyManager.initialize(savedBindings);
 
-                logger.success(`代理管理器初始化完成，可用代理数: ${this.proxyManager.getAvailableProxyCount()}`, 'PROXY');
+                // 2. 验证已绑定的代理，并处理重复绑定
+                const accountsToReassign = await this.proxyManager.validateAndRebalanceBindings();
+
+                // 3. 为需要重新分配的账户分配新代理
+                if (accountsToReassign.size > 0) {
+                    logger.info(`发现 ${accountsToReassign.size} 个账户需要重新分配代理...`, 'PROXY');
+                    for (const [email, reason] of accountsToReassign.entries()) {
+                        logger.info(`正在为 ${email} 重新分配代理 (原因: ${reason})`, 'PROXY');
+                        const newProxy = await this.proxyManager.assignProxy(email);
+                        if (newProxy) {
+                            await this.dataPersistence.saveProxyBinding(email, newProxy);
+                        }
+                    }
+                }
+                
+                logger.success(`代理管理器验证和重平衡完成`, 'PROXY');
             } else {
                 logger.info('未配置 SOCKS5 代理，将直接连接', 'PROXY');
             }
@@ -84,6 +98,19 @@ class Account {
                 await this._loginEnvironmentAccounts()
             }
 
+            // 在验证Token之前，为所有没有代理的账户分配代理
+            if (this.proxyManager) {
+                for (const account of this.accountTokens) {
+                    if (!account.proxy) {
+                        const assignedProxy = await this.proxyManager.assignProxy(account.email);
+                        if (assignedProxy) {
+                            account.proxy = assignedProxy;
+                            await this.dataPersistence.saveProxyBinding(account.email, assignedProxy);
+                        }
+                    }
+                }
+            }
+
             // 验证和清理无效令牌
             await this._validateAndCleanTokens()
 
@@ -92,8 +119,18 @@ class Account {
 
             // 初始化 CLI 账户,随机初始化一个账号
             if (this.accountTokens.length > 0) {
-                const randomIndex = Math.floor(Math.random() * this.accountTokens.length)
-                const randomAccount = this.accountTokens[randomIndex]
+                const randomIndex = Math.floor(Math.random() * this.accountTokens.length);
+                const randomAccount = this.accountTokens[randomIndex];
+
+                // 确保在记录日志前，为这个被选中的账户分配一个代理（如果它还没有）
+                if (!randomAccount.proxy && this.proxyManager) {
+                    const assignedProxy = this.proxyManager.assignProxy(randomAccount.email);
+                    if (assignedProxy) {
+                        randomAccount.proxy = assignedProxy;
+                        await this.dataPersistence.saveProxyBinding(randomAccount.email, assignedProxy);
+                    }
+                }
+
                 let randomAccountProxyHost = 'N/A';
                 if (randomAccount.proxy) {
                     try {
@@ -101,8 +138,8 @@ class Account {
                         randomAccountProxyHost = proxyUrl.hostname;
                     } catch (e) { /* ignore */ }
                 }
-                logger.info(`初始化 CLI 账户, 随机初始化账号: ${randomAccount.email} (Proxy: ${randomAccountProxyHost})`, 'ACCOUNT')
-                await this._initializeCliAccount(randomAccount)
+                logger.info(`初始化 CLI 账户, 随机初始化账号: ${randomAccount.email} (Proxy: ${randomAccountProxyHost})`, 'ACCOUNT');
+                await this._initializeCliAccount(randomAccount);
             }
 
             // 设置cli定时器 每天00:00:00刷新请求次数
@@ -122,30 +159,32 @@ class Account {
     async _loginEnvironmentAccounts() {
         const loginPromises = this.accountTokens.map(async (account) => {
             if (!account.token && account.email && account.password) {
-                // 为账户分配代理
                 if (this.proxyManager) {
                     const assignedProxy = this.proxyManager.assignProxy(account.email);
-                    account.proxy = assignedProxy; // 将代理信息写入账户对象
-                    logger.info(`为账户 ${account.email} 分配代理: ${assignedProxy}`, 'PROXY');
+                    if (assignedProxy) {
+                        account.proxy = assignedProxy;
+                        logger.info(`为账户 ${account.email} 分配代理: ${assignedProxy}`, 'PROXY');
+                        // 持久化代理绑定
+                        await this.dataPersistence.saveProxyBinding(account.email, assignedProxy);
+                    }
                 }
 
-                // 在登录前设置当前代理，用于日志显示
                 global.currentLoginProxy = account.proxy || null;
-                const token = await this.tokenManager.login(account.email, account.password)
-                // 登录后清除全局代理变量
+                const token = await this.tokenManager.login(account.email, account.password);
                 global.currentLoginProxy = null;
+
                 if (token) {
-                    const decoded = this.tokenManager.validateToken(token)
+                    const decoded = this.tokenManager.validateToken(token);
                     if (decoded) {
-                        account.token = token
-                        account.expires = decoded.exp
+                        account.token = token;
+                        account.expires = decoded.exp;
                     }
                 }
             }
-            return account
-        })
+            return account;
+        });
 
-        this.accountTokens = await Promise.all(loginPromises)
+        this.accountTokens = await Promise.all(loginPromises);
     }
 
     /**
@@ -155,8 +194,8 @@ class Account {
      */
     async _initializeCliAccount(account) {
         try {
-            const cliManager = require('./cli.manager')
-            const cliAccount = await cliManager.initCliAccount(account.token)
+            const cliManager = require('./cli.manager');
+            const cliAccount = await cliManager.initCliAccount(account.token, account.proxy);
 
             if (cliAccount.access_token && cliAccount.refresh_token && cliAccount.expiry_date) {
                 account.cli_info = {
@@ -168,27 +207,26 @@ class Account {
                             const refreshToken = await cliManager.refreshAccessToken({
                                 access_token: account.cli_info.access_token,
                                 refresh_token: account.cli_info.refresh_token,
-                                expiry_date: account.cli_info.expiry_date
-                            })
+                                expiry_date: account.cli_info.expiry_date,
+                            }, account.proxy); // 传递代理
                             if (refreshToken.access_token && refreshToken.refresh_token && refreshToken.expiry_date) {
-                                account.cli_info.access_token = refreshToken.access_token
-                                account.cli_info.refresh_token = refreshToken.refresh_token
-                                account.cli_info.expiry_date = refreshToken.expiry_date
-                                logger.info(`CLI账户 ${account.email} 令牌刷新成功`, 'CLI')
+                                account.cli_info.access_token = refreshToken.access_token;
+                                account.cli_info.refresh_token = refreshToken.refresh_token;
+                                account.cli_info.expiry_date = refreshToken.expiry_date;
+                                logger.info(`CLI账户 ${account.email} 令牌刷新成功`, 'CLI');
                             }
                         } catch (error) {
-                            logger.error(`CLI账户 ${account.email} 令牌刷新失败`, 'CLI', '', error)
+                            logger.error(`CLI账户 ${account.email} 令牌刷新失败`, 'CLI', '', error);
                         }
-                        // 每2小时刷新一次
                     }, 1000 * 60 * 60 * 2),
-                    request_number: 0
-                }
-                logger.success(`CLI账户 ${account.email} 初始化成功`, 'CLI')
+                    request_number: 0,
+                };
+                logger.success(`CLI账户 ${account.email} 初始化成功`, 'CLI');
             } else {
-                logger.error(`CLI账户 ${account.email} 初始化失败：无效的响应数据`, 'CLI')
+                logger.error(`CLI账户 ${account.email} 初始化失败：无效的响应数据`, 'CLI');
             }
         } catch (error) {
-            logger.error(`CLI账户 ${account.email} 初始化失败`, 'CLI', '', error)
+            logger.error(`CLI账户 ${account.email} 初始化失败`, 'CLI', '', error);
         }
     }
 
@@ -247,8 +285,12 @@ class Account {
                 // 为账户分配代理
                 let assignedProxy = null;
                 if (this.proxyManager) {
-                    assignedProxy = this.proxyManager.assignProxy(account.email);
+                    assignedProxy = await this.proxyManager.assignProxy(account.email);
                     account.proxy = assignedProxy; // 将代理信息写入账户对象
+                    if (assignedProxy) {
+                        // 持久化代理绑定
+                        await this.dataPersistence.saveProxyBinding(account.email, assignedProxy);
+                    }
                 }
                 
                 // 在登录前设置当前代理，用于日志显示
@@ -347,35 +389,35 @@ class Account {
     }
 
     /**
-     * 获取可用的账户令牌
-     * @returns {string|null} 账户令牌或null
+     * 获取可用的账户对象
+     * @returns {Object|null} 账户对象或null
      */
-    getAccountToken() {
+    getNextAccount() {
         if (!this.isInitialized) {
-            logger.warn('账户管理器尚未初始化完成', 'ACCOUNT')
-            return null
+            logger.warn('账户管理器尚未初始化完成', 'ACCOUNT');
+            return null;
         }
 
         if (this.accountTokens.length === 0) {
-            logger.error('没有可用的账户令牌', 'ACCOUNT')
-            return null
+            logger.error('没有可用的账户', 'ACCOUNT');
+            return null;
         }
 
-        const token = this.accountRotator.getNextToken()
-        if (!token) {
-            logger.error('所有账户令牌都不可用', 'ACCOUNT')
+        const account = this.accountRotator.getNextAccount();
+        if (!account) {
+            logger.error('所有账户都不可用', 'ACCOUNT');
         }
 
-        return token
+        return account;
     }
 
     /**
-     * 根据邮箱获取特定账户的令牌
+     * 根据邮箱获取特定账户对象
      * @param {string} email - 邮箱地址
-     * @returns {string|null} 账户令牌或null
+     * @returns {Object|null} 账户对象或null
      */
-    getTokenByEmail(email) {
-        return this.accountRotator.getTokenByEmail(email)
+    getAccountByEmail(email) {
+        return this.accountRotator.getAccountByEmail(email);
     }
 
     /**
@@ -544,58 +586,54 @@ class Account {
      */
     async addAccount(email, password) {
         try {
-            // 检查账户是否已存在
-            const existingAccount = this.accountTokens.find(acc => acc.email === email)
+            const existingAccount = this.accountTokens.find(acc => acc.email === email);
             if (existingAccount) {
-                logger.warn(`账户 ${email} 已存在`, 'ACCOUNT')
-                return false
+                logger.warn(`账户 ${email} 已存在`, 'ACCOUNT');
+                return false;
             }
 
-            // 为账户分配代理
             let assignedProxy = null;
             if (this.proxyManager) {
                 assignedProxy = this.proxyManager.assignProxy(email);
-                logger.info(`为新账户 ${email} 分配代理: ${assignedProxy}`, 'PROXY');
+                if (assignedProxy) {
+                    logger.info(`为新账户 ${email} 分配代理: ${assignedProxy}`, 'PROXY');
+                    // 持久化代理绑定
+                    await this.dataPersistence.saveProxyBinding(email, assignedProxy);
+                }
             }
 
-            // 在登录前设置当前代理，用于日志显示
             global.currentLoginProxy = assignedProxy;
             const token = await this.tokenManager.login(email, password);
-            // 登录后清除全局代理变量
             global.currentLoginProxy = null;
 
             if (!token) {
                 logger.error(`账户 ${email} 登录失败，无法添加`, 'ACCOUNT');
-                return false
+                return false;
             }
 
-            const decoded = this.tokenManager.validateToken(token)
+            const decoded = this.tokenManager.validateToken(token);
             if (!decoded) {
-                logger.error(`账户 ${email} 令牌无效，无法添加`, 'ACCOUNT')
-                return false
+                logger.error(`账户 ${email} 令牌无效，无法添加`, 'ACCOUNT');
+                return false;
             }
 
             const newAccount = {
                 email,
                 password,
                 token,
-                expires: decoded.exp
-            }
+                expires: decoded.exp,
+                proxy: assignedProxy, // 将代理信息添加到新账户对象中
+            };
 
-            // 添加到内存
-            this.accountTokens.push(newAccount)
+            this.accountTokens.push(newAccount);
+            await this.dataPersistence.saveAccount(email, newAccount);
+            this.accountRotator.setAccounts(this.accountTokens);
 
-            // 保存到持久化存储
-            await this.dataPersistence.saveAccount(email, newAccount)
-
-            // 更新轮询器
-            this.accountRotator.setAccounts(this.accountTokens)
-
-            logger.success(`成功添加账户: ${email}`, 'ACCOUNT')
-            return true
+            logger.success(`成功添加账户: ${email}`, 'ACCOUNT');
+            return true;
         } catch (error) {
-            logger.error(`添加账户失败 (${email})`, 'ACCOUNT', '', error)
-            return false
+            logger.error(`添加账户失败 (${email})`, 'ACCOUNT', '', error);
+            return false;
         }
     }
 
