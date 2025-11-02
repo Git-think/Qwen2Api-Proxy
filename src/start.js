@@ -1,10 +1,14 @@
-const cluster = require('cluster')
-const os = require('os')
-const { logger } = require('./utils/logger')
+const cluster = require('cluster');
+const os = require('os');
 const fileConfig = require('./utils/file-config');
 
-// 加载环境变量
-require('dotenv').config()
+(async () => {
+    await fileConfig.applyFileConfig();
+
+    const { logger } = require('./utils/logger');
+    
+    // 加载环境变量
+    require('dotenv').config();
 
 // 获取CPU核心数
 const cpuCores = os.cpus().length
@@ -38,25 +42,18 @@ logger.info(`服务端口: ${SERVICE_PORT}`, 'AUTO')
 
 // 智能判断启动方式
 if (instances === 1) {
-  logger.info('📦 使用单进程模式启动', 'AUTO')
-  // 直接启动服务器
-  ;(async () => {
-    await fileConfig.applyFileConfig();
+    logger.info('📦 使用单进程模式启动', 'AUTO');
+    // 直接启动服务器
     require('./server.js');
-  })();
 } else {
-  // 检查是否通过PM2启动
-  if (process.env.PM2_USAGE || process.env.pm_id !== undefined) {
-    logger.info(`PM2进程启动 - 进程ID: ${process.pid}, 工作进程ID: ${process.env.pm_id || 'unknown'}`, 'PM2')
-    require('./server.js')
-  } else if (cluster.isMaster) {
-    logger.info(`🔥 使用Node.js集群模式启动 (${instances}个进程)`, 'AUTO')
+    // 检查是否通过PM2启动
+    if (process.env.PM2_USAGE || process.env.pm_id !== undefined) {
+        logger.info(`PM2进程启动 - 进程ID: ${process.pid}, 工作进程ID: ${process.env.pm_id || 'unknown'}`, 'PM2');
+        require('./server.js');
+    } else if (cluster.isMaster) {
+        logger.info(`🔥 使用Node.js集群模式启动 (${instances}个进程)`, 'AUTO');
 
-    ;(async () => {
-      await fileConfig.applyFileConfig();
-    })();
-
-    logger.info(`启动主进程 - PID: ${process.pid}`, 'CLUSTER')
+        logger.info(`启动主进程 - PID: ${process.pid}`, 'CLUSTER');
     logger.info(`运行环境: ${NODE_ENV}`, 'CLUSTER')
 
     // 创建工作进程
@@ -114,8 +111,9 @@ if (instances === 1) {
     })
 
     process.on('SIGINT', () => {
-      logger.info(`工作进程 ${process.pid} 收到SIGINT信号，正在关闭...`, 'WORKER')
-      process.exit(0)
-    })
+      logger.info(`工作进程 ${process.pid} 收到SIGINT信号，正在关闭...`, 'WORKER');
+      process.exit(0);
+    });
   }
 }
+})();
