@@ -1,6 +1,6 @@
 const express = require('express')
 const bodyParser = require('body-parser')
-const config = require('./config/index.js')
+const loadConfig = require('./config/index.js')
 const cors = require('cors')
 const { logger } = require('./utils/logger')
 const app = express()
@@ -15,7 +15,7 @@ const settingsRouter = require('./routes/settings.js')
 const TokenManager = require('./utils/token-manager');
 const DataPersistence = require('./utils/data-persistence');
 
-
+let config;
 
 app.use(bodyParser.json({ limit: '128mb' }))
 app.use(bodyParser.urlencoded({ limit: '128mb', extended: true }))
@@ -46,24 +46,28 @@ app.use((err, req, res, next) => {
   res.status(500).send('服务器内部错误')
 })
 
+async function startServer() {
+    config = await loadConfig();
+    // 服务器启动信息
+    const serverInfo = {
+      address: config.listenAddress || 'localhost',
+      port: config.listenPort,
+      outThink: config.outThink ? '开启' : '关闭',
+      searchInfoMode: config.searchInfoMode === 'table' ? '表格' : '文本',
+      dataSaveMode: config.dataSaveMode,
+      logLevel: config.logLevel,
+      enableFileLog: config.enableFileLog
+    }
 
-// 服务器启动信息
-const serverInfo = {
-  address: config.listenAddress || 'localhost',
-  port: config.listenPort,
-  outThink: config.outThink ? '开启' : '关闭',
-  searchInfoMode: config.searchInfoMode === 'table' ? '表格' : '文本',
-  dataSaveMode: config.dataSaveMode,
-  logLevel: config.logLevel,
-  enableFileLog: config.enableFileLog
+    if (config.listenAddress) {
+      app.listen(config.listenPort, config.listenAddress, () => {
+        logger.server('服务器启动成功', 'SERVER', serverInfo)
+      })
+    } else {
+      app.listen(config.listenPort, () => {
+        logger.server('服务器启动成功', 'SERVER', serverInfo)
+      })
+    }
 }
 
-if (config.listenAddress) {
-  app.listen(config.listenPort, config.listenAddress, () => {
-    logger.server('服务器启动成功', 'SERVER', serverInfo)
-  })
-} else {
-  app.listen(config.listenPort, () => {
-    logger.server('服务器启动成功', 'SERVER', serverInfo)
-  })
-}
+module.exports = { startServer };

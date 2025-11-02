@@ -1,11 +1,15 @@
 const axios = require('axios')
 const accountManager = require('../utils/account.js')
-const config = require('../config/index.js')
+const loadConfig = require('../config/index.js')
 
 let cachedModels = null
 let fetchPromise = null
+let config;
 
 const getLatestModels = async (force = false) => {
+    if (!config) {
+        config = await loadConfig();
+    }
     // 如果有缓存且不强制刷新，直接返回
     if (cachedModels && !force) {
         return cachedModels

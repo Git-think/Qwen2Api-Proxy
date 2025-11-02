@@ -1,4 +1,4 @@
-const config = require('../config/index.js')
+const loadConfig = require('../config/index.js')
 const dataPersistence = require('./data-persistence')
 const TokenManager = require('./token-manager')
 const AccountRotator = require('./account-rotator')
@@ -19,7 +19,8 @@ class Account {
         this.isInitialized = false
 
         // 配置信息
-        this.defaultHeaders = config.defaultHeaders || {}
+        this.config = null;
+        this.defaultHeaders = {}
 
         // cli请求次数定时刷新器
         this.cliRequestNumberInterval = null
@@ -27,9 +28,6 @@ class Account {
 
         // 代理管理器
         this.proxyManager = null;
-
-        // 初始化
-        this._initialize()
     }
 
     /**
@@ -38,10 +36,17 @@ class Account {
      */
     async _initialize() {
         try {
+            await this._processSetEnvFile(); // 处理 set-env 文件
+            await this._processAddFile(); // 处理 add 文件
+            await this._processReloadEnvFile(); // 处理 reload-env 文件
+
+            this.config = await loadConfig();
+            this.defaultHeaders = this.config.defaultHeaders || {};
+
             // 初始化 ProxyManager
-            if (config.socks5Proxies.length > 0) {
+            if (this.config.socks5Proxies.length > 0) {
                 const ProxyManager = require('./proxy-manager');
-                this.proxyManager = new ProxyManager(this.dataPersistence);
+                this.proxyManager = new ProxyManager(this.dataPersistence, this.config);
 
                 const savedBindings = await this.dataPersistence.loadProxyBindings();
                 const savedStatuses = await this.dataPersistence.loadProxyStatuses();
@@ -61,10 +66,10 @@ class Account {
             }
 
             // 设置定期刷新令牌
-            if (config.autoRefresh) {
+            if (this.config.autoRefresh) {
                 this.refreshInterval = setInterval(
                     () => this.autoRefreshTokens(),
-                    (config.autoRefreshInterval || 21600) * 1000 // 默认6小时
+                    (this.config.autoRefreshInterval || 21600) * 1000 // 默认6小时
                 )
             }
 
@@ -99,7 +104,7 @@ class Account {
             }
 
             // 如果是环境变量模式，需要进行登录获取令牌
-            if (config.dataSaveMode === 'none' && this.accountTokens.length > 0) {
+            if (this.config.dataSaveMode === 'none' && this.accountTokens.length > 0) {
                 await this._loginEnvironmentAccounts()
             }
 
@@ -845,14 +850,170 @@ class Account {
         return this.proxyManager.getProxyAssignments()
     }
 
+    /**
+     * 处理 set-env 配置文件
+     * @private
+     */
+    async _processSetEnvFile() {
+        const fs = require('fs').promises;
+        const path = require('path');
+        const setEnvPath = path.join(__dirname, '..', '..', 'data', 'set-env');
+
+        try {
+            await fs.access(setEnvPath);
+        } catch (error) {
+            // 文件不存在，直接返回
+            return;
+        }
+
+        logger.info('检测到 set-env 文件，正在处理...', 'CONFIG');
+
+        try {
+            const content = await fs.readFile(setEnvPath, 'utf-8');
+            const lines = content.split('\n').filter(line => line.trim() !== '' && !line.startsWith('#'));
+
+            for (const line of lines) {
+                const [key, ...valueParts] = line.split('=');
+                const value = valueParts.join('=').trim();
+                if (key && value) {
+                    await this.dataPersistence.saveSetting(key.trim(), value);
+                    logger.info(`动态设置已更新: ${key.trim()} = ${value}`, 'CONFIG');
+                }
+            }
+
+            await fs.unlink(setEnvPath);
+            logger.success('set-env 文件处理完毕并已删除', 'CONFIG');
+        } catch (error) {
+            logger.error('处理 set-env 文件时出错', 'CONFIG', '', error);
+        }
+    }
+
+    /**
+     * 处理 add 数据文件
+     * @private
+     */
+    async _processAddFile() {
+        const fs = require('fs').promises;
+        const path = require('path');
+        const addFilePath = path.join(__dirname, '..', '..', 'data', 'add');
+
+        try {
+            await fs.access(addFilePath);
+        } catch (error) {
+            return; // 文件不存在
+        }
+
+        logger.info('检测到 add 文件，正在处理...', 'DATA');
+
+        try {
+            const content = await fs.readFile(addFilePath, 'utf-8');
+            const lines = content.split('\n').filter(line => line.trim() !== '' && !line.startsWith('#'));
+
+            for (const line of lines) {
+                if (line.startsWith('ACCOUNTS=')) {
+                    const accountsStr = line.substring('ACCOUNTS='.length).trim();
+                    const accounts = accountsStr.split(',').map(item => {
+                        const [email, password] = item.split(':');
+                        return { email: email.trim(), password: password.trim() };
+                    });
+
+                    for (const acc of accounts) {
+                        await this.addAccount(acc.email, acc.password);
+                    }
+                }
+            }
+
+            await fs.unlink(addFilePath);
+            logger.success('add 文件处理完毕并已删除', 'DATA');
+        } catch (error) {
+            logger.error('处理 add 文件时出错', 'DATA', '', error);
+        }
+    }
+
+    /**
+     * 处理 reload-env 文件
+     * @private
+     */
+    async _processReloadEnvFile() {
+        const fs = require('fs').promises;
+        const path = require('path');
+        const reloadEnvPath = path.join(__dirname, '..', '..', 'data', 'reload-env');
+
+        try {
+            await fs.access(reloadEnvPath);
+        } catch (error) {
+            return; // 文件不存在
+        }
+
+        logger.info('检测到 reload-env 文件，正在处理...', 'CONFIG');
+
+        try {
+            const content = await fs.readFile(reloadEnvPath, 'utf-8');
+            const lines = content.split('\n').map(line => line.trim()).filter(line => line !== '' && !line.startsWith('#'));
+
+            if (lines.length === 0) {
+                // 如果文件为空，则重新加载 .env 中的所有账户和代理
+                logger.info('reload-env 文件为空，将重新加载所有账户和代理', 'CONFIG');
+                if (process.env.ACCOUNTS) {
+                    const accountsEnv = process.env.ACCOUNTS;
+                    const accounts = accountsEnv.split(',').map(item => {
+                        const [email, password] = item.split(':');
+                        return { email: email.trim(), password: password.trim() };
+                    });
+                    for (const acc of accounts) {
+                        await this.addAccount(acc.email, acc.password);
+                    }
+                }
+                if (this.proxyManager) {
+                    this.proxyManager.resetProxyStatuses();
+                }
+            } else {
+                // 根据文件内容选择性重新加载
+                for (const line of lines) {
+                    if (line.toLowerCase() === 'accounts') {
+                        logger.info('重新加载 .env 中的账户...', 'CONFIG');
+                        if (process.env.ACCOUNTS) {
+                            const accountsEnv = process.env.ACCOUNTS;
+                            const accounts = accountsEnv.split(',').map(item => {
+                                const [email, password] = item.split(':');
+                                return { email: email.trim(), password: password.trim() };
+                            });
+                            for (const acc of accounts) {
+                                await this.addAccount(acc.email, acc.password);
+                            }
+                        }
+                    } else if (line.toLowerCase() === 'proxy') {
+                        logger.info('重置 .env 中代理的状态...', 'CONFIG');
+                        if (this.proxyManager) {
+                            this.proxyManager.resetProxyStatuses(this.config.socks5Proxies);
+                        }
+                    }
+                }
+            }
+
+            await fs.unlink(reloadEnvPath);
+            logger.success('reload-env 文件处理完毕并已删除', 'CONFIG');
+        } catch (error) {
+            logger.error('处理 reload-env 文件时出错', 'CONFIG', '', error);
+        }
+    }
 }
 
-if (!(process.env.API_KEY || config.apiKey)) {
-    logger.error('请务必设置 API_KEY 环境变量', 'CONFIG', '⚙️')
-    process.exit(1)
-}
+const accountManager = new Account();
 
-const accountManager = new Account()
+(async () => {
+    try {
+        await accountManager._initialize();
+        const config = await loadConfig();
+        if (!config.apiKeys || config.apiKeys.length === 0) {
+            logger.error('请务必设置 API_KEY 环境变量', 'CONFIG', '⚙️');
+            process.exit(1);
+        }
+    } catch (error) {
+        logger.error('初始化 accountManager 失败', 'ACCOUNT', '', error);
+        process.exit(1);
+    }
+})();
 
 // 添加进程退出时的清理
 process.on('exit', () => {

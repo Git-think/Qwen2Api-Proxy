@@ -1,6 +1,7 @@
 const cluster = require('cluster')
 const os = require('os')
 const { logger } = require('./utils/logger')
+const { startServer } = require('./server.js');
 
 // 加载环境变量
 require('dotenv').config()
@@ -39,12 +40,12 @@ logger.info(`服务端口: ${SERVICE_PORT}`, 'AUTO')
 if (instances === 1) {
   logger.info('📦 使用单进程模式启动', 'AUTO')
   // 直接启动服务器
-  require('./server.js')
+  startServer();
 } else {
   // 检查是否通过PM2启动
   if (process.env.PM2_USAGE || process.env.pm_id !== undefined) {
     logger.info(`PM2进程启动 - 进程ID: ${process.pid}, 工作进程ID: ${process.env.pm_id || 'unknown'}`, 'PM2')
-    require('./server.js')
+    startServer();
   } else if (cluster.isMaster) {
     logger.info(`🔥 使用Node.js集群模式启动 (${instances}个进程)`, 'AUTO')
 
@@ -97,7 +98,7 @@ if (instances === 1) {
   } else {
     // 工作进程逻辑
     logger.info(`工作进程启动 - PID: ${process.pid}`, 'WORKER')
-    require('./server.js')
+    startServer();
 
     // 工作进程优雅关闭处理
     process.on('SIGTERM', () => {

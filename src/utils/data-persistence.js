@@ -1,14 +1,19 @@
 const fs = require('fs').promises;
 const path = require('path');
-const config = require('../config/index.js');
+const loadConfig = require('../config/index.js');
 const { logger } = require('./logger');
 const redis = require('./redis');
 
 class DataPersistence {
     constructor() {
-        this.mode = config.dataSaveMode;
+        this.mode = null; // 将在 init 中设置
         this.filePath = path.join(__dirname, '../../data/data.json');
         this.cache = null;
+    }
+
+    async init() {
+        const config = await loadConfig();
+        this.mode = config.dataSaveMode;
     }
 
     async _getData() {
@@ -56,7 +61,8 @@ class DataPersistence {
         return {
             accounts: [],
             proxyBindings: {},
-            proxyStatuses: {}
+            proxyStatuses: {},
+            settings: {} // 新增 settings 对象
         };
     }
 
@@ -97,6 +103,26 @@ class DataPersistence {
         data.proxyStatuses = statuses;
         await this._saveData(data);
     }
+
+    async loadSettings() {
+        const data = await this._getData();
+        return data.settings || {};
+    }
+
+    async saveSetting(key, value) {
+        const data = await this._getData();
+        if (!data.settings) {
+            data.settings = {};
+        }
+        data.settings[key] = value;
+        await this._saveData(data);
+    }
 }
 
-module.exports = new DataPersistence();
+const instance = new DataPersistence();
+// 异步初始化
+instance.init().catch(err => {
+    logger.error('Failed to initialize DataPersistence', 'DATA', '', err);
+    process.exit(1);
+});
+module.exports = instance;

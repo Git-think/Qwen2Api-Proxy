@@ -1,7 +1,9 @@
 const Redis = require('ioredis')
-const config = require('../config/index.js')
+const loadConfig = require('../config/index.js')
 const { logger } = require('./logger')
 const { getAllProxyBindings, setProxyBinding } = require('./proxy-manager')
+
+let config;
 
 /**
  * Redis 连接管理器
@@ -34,7 +36,7 @@ const IDLE_TIMEOUT = 5 * 60 * 1000
 /**
  * 判断是否需要TLS
  */
-const isTLS = config.redisURL && (config.redisURL.startsWith('rediss://') || config.redisURL.includes('--tls'))
+const isTLS = () => config.redisURL && (config.redisURL.startsWith('rediss://') || config.redisURL.includes('--tls'))
 
 /**
  * 创建Redis连接配置
@@ -42,7 +44,7 @@ const isTLS = config.redisURL && (config.redisURL.startsWith('rediss://') || con
 const createRedisConfig = () => ({
   ...REDIS_CONFIG,
   // TLS配置
-  ...(isTLS ? {
+  ...(isTLS() ? {
     tls: {
       rejectUnauthorized: true
     }
@@ -177,6 +179,9 @@ const disconnectRedis = async () => {
  * 确保Redis连接可用
  */
 const ensureConnection = async () => {
+  if (!config) {
+    config = await loadConfig();
+  }
   if (config.dataSaveMode !== 'redis') {
     logger.error('当前数据保存模式不是Redis', 'REDIS')
     throw new Error('当前数据保存模式不是Redis')
@@ -204,8 +209,8 @@ const getAllAccounts = async () => {
 
     do {
       const result = await client.scan(cursor, 'MATCH', 'user:*', 'COUNT', 100)
-      cursor = result[0]
-      keys.push(...result[1])
+      cursor = result
+      keys.push(...result)
     } while (cursor !== '0')
 
     if (!keys.length) {
@@ -415,8 +420,8 @@ const redisClient = {
 
     do {
       const result = await client.scan(cursor, 'MATCH', pattern, 'COUNT', 100)
-      cursor = result[0]
-      keys.push(...result[1])
+      cursor = result
+      keys.push(...result)
     } while (cursor !== '0')
 
     return keys
@@ -433,5 +438,15 @@ process.on('exit', cleanup)
 process.on('SIGINT', cleanup)
 process.on('SIGTERM', cleanup)
 
-// 根据配置决定是否导出Redis客户端
-module.exports = config.dataSaveMode === 'redis' ? redisClient : null
+let exportedClient = null;
+
+async function initialize() {
+    config = await loadConfig();
+    if (config.dataSaveMode === 'redis') {
+        exportedClient = redisClient;
+    }
+}
+
+initialize();
+
+module.exports = () => exportedClient;
