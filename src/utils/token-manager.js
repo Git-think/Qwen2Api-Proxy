@@ -18,9 +18,10 @@ class TokenManager {
    * 用户登录获取令牌
    * @param {string} email - 邮箱
    * @param {string} password - 密码
+   * @param {string|null} proxy - 代理URL
    * @returns {Promise<string|null>} 令牌或null
    */
-  async login(email, password) {
+  async login(email, password, proxy = null) {
     try {
       const response = await axios.post(this.loginEndpoint, {
         email: email,
@@ -33,9 +34,9 @@ class TokenManager {
       if (response.data && response.data.token) {
         // 解析代理URL以获取IP用于日志
         let proxyHostForLog = 'N/A';
-        if (global.currentLoginProxy) { // 假设在发起请求前，proxy信息被设置到一个全局变量或通过其他方式传递
+        if (proxy) {
           try {
-            const proxyUrl = new URL(global.currentLoginProxy);
+            const proxyUrl = new URL(proxy);
             proxyHostForLog = proxyUrl.hostname;
           } catch (e) { /* ignore */ }
         }
@@ -44,9 +45,9 @@ class TokenManager {
       } else {
         // 登录失败时也尝试显示代理IP
         let proxyHostForLog = 'N/A';
-        if (global.currentLoginProxy) {
+        if (proxy) {
           try {
-            const proxyUrl = new URL(global.currentLoginProxy);
+            const proxyUrl = new URL(proxy);
             proxyHostForLog = proxyUrl.hostname;
           } catch (e) { /* ignore */ }
         }
@@ -127,7 +128,7 @@ class TokenManager {
    */
   async refreshToken(account) {
     try {
-      const newToken = await this.login(account.email, account.password)
+      const newToken = await this.login(account.email, account.password, account.proxy)
       if (!newToken) {
         return null
       }

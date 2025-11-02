@@ -174,9 +174,7 @@ class Account {
                     }
                 }
 
-                global.currentLoginProxy = account.proxy || null;
-                const token = await this.tokenManager.login(account.email, account.password);
-                global.currentLoginProxy = null;
+                const token = await this.tokenManager.login(account.email, account.password, account.proxy);
 
                 if (token) {
                     const decoded = this.tokenManager.validateToken(token);
@@ -298,11 +296,7 @@ class Account {
                     }
                 }
                 
-                // 在登录前设置当前代理，用于日志显示
-                global.currentLoginProxy = assignedProxy;
-                const newToken = await this.tokenManager.login(account.email, account.password);
-                // 登录后清除全局代理变量
-                global.currentLoginProxy = null;
+                const newToken = await this.tokenManager.login(account.email, account.password, assignedProxy);
 
                 if (newToken) {
                     const decoded = this.tokenManager.validateToken(newToken)
@@ -546,10 +540,11 @@ class Account {
      * 用户登录（委托给 TokenManager）
      * @param {string} email - 邮箱
      * @param {string} password - 密码
+     * @param {string|null} proxy - 代理URL
      * @returns {Promise<string|null>} 令牌或null
      */
-    async login(email, password) {
-        return await this.tokenManager.login(email, password)
+    async login(email, password, proxy = null) {
+        return await this.tokenManager.login(email, password, proxy)
     }
 
     /**
@@ -729,9 +724,7 @@ class Account {
      */
     async _attemptLogin(email, password, proxy) {
         try {
-            global.currentLoginProxy = proxy;
-            const token = await this.tokenManager.login(email, password);
-            global.currentLoginProxy = null;
+            const token = await this.tokenManager.login(email, password, proxy);
 
             if (!token) {
                 logger.warn(`使用代理 ${proxy || 'N/A'} 登录 ${email} 失败：未能获取令牌`, 'ACCOUNT');

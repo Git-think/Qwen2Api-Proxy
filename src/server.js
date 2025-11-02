@@ -58,12 +58,13 @@ const serverInfo = {
   enableFileLog: config.enableFileLog
 }
 
-if (config.listenAddress) {
-  app.listen(config.listenPort, config.listenAddress, () => {
-    logger.server('服务器启动成功', 'SERVER', serverInfo)
-  })
-} else {
-  app.listen(config.listenPort, () => {
-    logger.server('服务器启动成功', 'SERVER', serverInfo)
-  })
-}
+const startServer = () => {
+  const server = app.listen(config.listenPort, config.listenAddress, () => {
+    const address = server.address();
+    serverInfo.address = address.address;
+    serverInfo.port = address.port;
+    logger.server('服务器启动成功', 'SERVER', serverInfo);
+  });
+};
+
+startServer();
