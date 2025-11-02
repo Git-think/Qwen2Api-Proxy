@@ -1,7 +1,7 @@
 const Redis = require('ioredis')
+const config = require('../config/index.js')
 const { logger } = require('./logger')
-
-let config; // 将在 initialize 中异步加载
+const { getAllProxyBindings, setProxyBinding } = require('./proxy-manager')
 
 /**
  * Redis 连接管理器
@@ -34,7 +34,7 @@ const IDLE_TIMEOUT = 5 * 60 * 1000
 /**
  * 判断是否需要TLS
  */
-const isTLS = () => config && config.redisURL && (config.redisURL.startsWith('rediss://') || config.redisURL.includes('--tls'))
+const isTLS = config.redisURL && (config.redisURL.startsWith('rediss://') || config.redisURL.includes('--tls'))
 
 /**
  * 创建Redis连接配置
@@ -42,7 +42,7 @@ const isTLS = () => config && config.redisURL && (config.redisURL.startsWith('re
 const createRedisConfig = () => ({
   ...REDIS_CONFIG,
   // TLS配置
-  ...(isTLS() ? {
+  ...(isTLS ? {
     tls: {
       rejectUnauthorized: true
     }
@@ -177,12 +177,8 @@ const disconnectRedis = async () => {
  * 确保Redis连接可用
  */
 const ensureConnection = async () => {
-  if (!config) {
-    // 如果配置尚未加载，则无法继续
-    throw new Error('Redis模块尚未初始化，无法建立连接');
-  }
   if (config.dataSaveMode !== 'redis') {
-    // logger.error('当前数据保存模式不是Redis', 'REDIS')
+    logger.error('当前数据保存模式不是Redis', 'REDIS')
     throw new Error('当前数据保存模式不是Redis')
   }
 
@@ -208,8 +204,8 @@ const getAllAccounts = async () => {
 
     do {
       const result = await client.scan(cursor, 'MATCH', 'user:*', 'COUNT', 100)
-      cursor = result
-      keys.push(...result)
+      cursor = result[0]
+      keys.push(...result[1])
     } while (cursor !== '0')
 
     if (!keys.length) {
@@ -357,8 +353,8 @@ const redisClient = {
   // 为 Redis 模式实现的代理绑定管理方法
   // 使用 Redis 的 hash 存储 'proxy_bindings' -> { email: proxy_url }
   async getAllProxyBindings() {
-    if (!config || config.dataSaveMode !== 'redis') {
-      // logger.error('getAllProxyBindings called but dataSaveMode is not redis', 'REDIS');
+    if (config.dataSaveMode !== 'redis') {
+      logger.error('getAllProxyBindings called but dataSaveMode is not redis', 'REDIS');
       return {};
     }
     try {
@@ -374,8 +370,8 @@ const redisClient = {
   },
 
   async setProxyBinding(email, proxyUrl) {
-    if (!config || config.dataSaveMode !== 'redis') {
-      // logger.error('setProxyBinding called but dataSaveMode is not redis', 'REDIS');
+    if (config.dataSaveMode !== 'redis') {
+      logger.error('setProxyBinding called but dataSaveMode is not redis', 'REDIS');
       return false;
     }
     try {
@@ -419,8 +415,8 @@ const redisClient = {
 
     do {
       const result = await client.scan(cursor, 'MATCH', pattern, 'COUNT', 100)
-      cursor = result
-      keys.push(...result)
+      cursor = result[0]
+      keys.push(...result[1])
     } while (cursor !== '0')
 
     return keys
@@ -437,22 +433,5 @@ process.on('exit', cleanup)
 process.on('SIGINT', cleanup)
 process.on('SIGTERM', cleanup)
 
-// 修改导出逻辑
-let initializationPromise = null;
-
-const initialize = async () => {
-    // 动态导入以避免循环依赖
-    const loadConfig = require('../config/index.js');
-    config = await loadConfig();
-    if (config.dataSaveMode === 'redis') {
-        return redisClient;
-    }
-    return null;
-};
-
-module.exports = () => {
-    if (!initializationPromise) {
-        initializationPromise = initialize();
-    }
-    return initializationPromise;
-};
+// 根据配置决定是否导出Redis客户端
+module.exports = config.dataSaveMode === 'redis' ? redisClient : null

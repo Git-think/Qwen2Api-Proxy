@@ -1,15 +1,15 @@
 const { SocksProxyAgent } = require('socks-proxy-agent');
 const axios = require('axios');
+const config = require('../config/index.js');
 const { logger } = require('./logger');
 
 class ProxyManager {
-  constructor(dataPersistence, config) {
+  constructor(dataPersistence) {
     this.proxies = new Map(); // Key: proxyUrl, Value: { url, status, assignedAccounts }
     this.proxyAssignment = new Map(); // Key: email, Value: proxyUrl
     this.dataPersistence = dataPersistence;
-    this.config = config;
 
-    this.config.socks5Proxies.forEach(proxyUrl => {
+    config.socks5Proxies.forEach(proxyUrl => {
       this.proxies.set(proxyUrl, {
         url: proxyUrl,
         status: 'untested', // 'untested', 'available', 'failed'
@@ -148,26 +148,6 @@ class ProxyManager {
       statuses[url] = data.status;
     }
     await this.dataPersistence.saveProxyStatuses(statuses);
-  }
-
-  resetProxyStatuses(proxyUrls) {
-    if (!proxyUrls || proxyUrls.length === 0) {
-        // 重置所有代理的状态
-        for (const proxyData of this.proxies.values()) {
-            proxyData.status = 'untested';
-        }
-        logger.info('已将所有代理的状态重置为 "untested"', 'PROXY');
-    } else {
-        // 只重置指定的代理
-        for (const url of proxyUrls) {
-            if (this.proxies.has(url)) {
-                this.proxies.get(url).status = 'untested';
-                logger.info(`已将代理 ${url} 的状态重置为 "untested"`, 'PROXY');
-            }
-        }
-    }
-    // 立即持久化状态更改
-    this.persistStatuses();
   }
 }
 

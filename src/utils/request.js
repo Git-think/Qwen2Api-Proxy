@@ -1,13 +1,9 @@
 const axios = require('axios')
-const loadConfig = require('../config/index.js')
+const config = require('../config/index.js')
 const accountManager = require('./account.js')
 const { logger } = require('./logger')
 const { SocksProxyAgent } = require('socks-proxy-agent')
 
-let config;
-(async () => {
-    config = await loadConfig();
-})();
 
 /**
  * 发送聊天请求

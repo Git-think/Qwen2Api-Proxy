@@ -1,56 +1,41 @@
 const fs = require('fs').promises;
 const path = require('path');
+const config = require('../config/index.js');
 const { logger } = require('./logger');
 const redis = require('./redis');
 
 class DataPersistence {
     constructor() {
-        this.mode = process.env.DATA_SAVE_MODE || 'none';
+        this.mode = config.dataSaveMode;
         this.filePath = path.join(__dirname, '../../data/data.json');
         this.cache = null;
-        this.isInitialized = false;
-        this.initializationPromise = this._initialize();
-    }
-
-    async _initialize() {
-        if (this.isInitialized) {
-            return;
-        }
-        try {
-            // 核心逻辑只执行一次
-            if (this.mode === 'file') {
-                try {
-                    const data = await fs.readFile(this.filePath, 'utf8');
-                    this.cache = JSON.parse(data);
-                } catch (error) {
-                    if (error.code === 'ENOENT') {
-                        logger.info('数据文件不存在，正在创建默认文件...', 'FILE');
-                        const defaultData = this._getDefaultData();
-                        await this._saveData(defaultData); // _saveData 内部会设置缓存
-                        logger.success('默认数据文件创建成功', 'FILE');
-                    } else {
-                        throw error; // 抛出其他读取错误
-                    }
-                }
-            } else if (this.mode === 'redis') {
-                const data = await redis.get('qwen_proxy_data');
-                this.cache = data ? JSON.parse(data) : this._getDefaultData();
-            } else {
-                this.cache = this._getDefaultData();
-            }
-
-            this.isInitialized = true;
-            logger.info(`数据持久化模块初始化完成 (模式: ${this.mode})`, 'DATA');
-        } catch (error) {
-            logger.error('数据持久化模块初始化失败', 'DATA', '', error);
-            this.isInitialized = false; // 确保失败后可以重试
-            throw error;
-        }
     }
 
     async _getData() {
-        await this.initializationPromise;
-        return this.cache || this._getDefaultData();
+        if (this.cache) {
+            return this.cache;
+        }
+
+        try {
+            if (this.mode === 'file') {
+                const data = await fs.readFile(this.filePath, 'utf8');
+                this.cache = JSON.parse(data);
+                return this.cache;
+            } else if (this.mode === 'redis') {
+                const data = await redis.get('qwen_proxy_data');
+                this.cache = data ? JSON.parse(data) : this._getDefaultData();
+                return this.cache;
+            }
+        } catch (error) {
+            if (error.code === 'ENOENT') {
+                logger.info('数据文件不存在，正在创建默认文件...', 'FILE');
+                await this._saveData(this._getDefaultData());
+                logger.success('默认数据文件创建成功', 'FILE');
+                return this._getDefaultData();
+            }
+            logger.error('加载数据失败', 'DATA', '', error);
+        }
+        return this._getDefaultData();
     }
 
     async _saveData(data) {
@@ -71,8 +56,7 @@ class DataPersistence {
         return {
             accounts: [],
             proxyBindings: {},
-            proxyStatuses: {},
-            settings: {} // 新增 settings 对象
+            proxyStatuses: {}
         };
     }
 
@@ -113,21 +97,6 @@ class DataPersistence {
         data.proxyStatuses = statuses;
         await this._saveData(data);
     }
-
-    async loadSettings() {
-        const data = await this._getData();
-        return data.settings || {};
-    }
-
-    async saveSetting(key, value) {
-        const data = await this._getData();
-        if (!data.settings) {
-            data.settings = {};
-        }
-        data.settings[key] = value;
-        await this._saveData(data);
-    }
 }
 
-const instance = new DataPersistence();
-module.exports = instance;
+module.exports = new DataPersistence();

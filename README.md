@@ -4,7 +4,7 @@
 
 # 🚀 Qwen-Proxy
 
-[![Version](https://img.shields.io/badge/version-2025.11.02.10.27-blue.svg)](https://github.com/Git-think/Qwen2Api-Proxy)
+[![Version](https://img.shields.io/badge/version-2025.11.02.09.39-blue.svg)](https://github.com/Git-think/Qwen2Api-Proxy)
 [![Node.js](https://img.shields.io/badge/Node.js-18+-green.svg)](https://nodejs.org/)
 [![Docker](https://img.shields.io/badge/Docker-supported-blue.svg)](https://hub.docker.com/r/Git-think/qwen2api-proxy)
 [![Binary](https://img.shields.io/badge/Binary-Available-orange.svg)](https://github.com/Git-think/Qwen2Api-Proxy/releases)
@@ -28,7 +28,6 @@
 - **📸 灵活的缓存**: 支持内存和文件两种图片缓存模式，适应不同部署环境。
 - **🖥️ 强大的 CLI 支持**: 提供独立的 CLI 端点，支持高达 256K 的上下文和工具调用。
 - **🐳 全面的部署选项**: 支持 Docker、Docker Compose、PM2 和二进制文件部署。
-- **⚙️ 动态配置**: 支持通过在 `data` 目录下放置特定文件 (`set-env`, `add`, `reload-env`) 在**应用启动时**动态修改配置，无需手动编辑 `.env` 文件或环境变量。
 
 ## 🛠️ 快速开始
 
@@ -184,27 +183,6 @@ SOCKS5_PROXIES=socks5://user1:pass1@host1:port1,socks5://user2:pass2@host2:port2
 </div>
 
 ---
-
-### ⚙️ 基于文件的动态配置
-
-本应用支持通过在 `data/` 目录下创建特定的文件来实现**启动时**的动态配置和数据管理，无需重新配置环境变量或通过网页端操作。应用会在启动阶段自动检测并处理这些文件。
-
-| 文件名 | 功能描述 | 使用场景 |
-| --- | --- | --- |
-| `set-env` | **持久化设置环境变量**。文件内容为 `KEY=VALUE` 格式，用于覆盖 `.env` 中的配置。处理后设置会保存到 `data.json` 中。 | • 动态修改 `LOG_LEVEL` 以进行调试。<br>• 在不修改 `.env` 的情况下更新配置。 |
-| `add` | **批量添加数据**。目前支持 `ACCOUNTS=user:pass,user2:pass2` 格式，用于批量添加账户。 | • 快速导入多个新账户。<br>• 自动化账户添加流程。 |
-| `reload-env` | **重新加载和同步 `.env` 配置**。用于增量更新 `ACCOUNTS` 和 `SOCKS5_PROXIES`，同时会重置所有代理状态为 `untested`。 | • 在 `.env` 中添加了新账户或代理后，希望在不丢失现有数据的情况下应用更新。 |
-
-**工作流程:**
-1.  在 `data/` 目录下创建相应的文件（例如 `set-env`）。
-2.  在文件中写入指定的命令（例如 `LOG_LEVEL=DEBUG`）。
-3.  应用在启动时会自动读取、处理该文件，并将其删除。
-4.  配置或数据即时生效并持久化。
-
-**示例: 动态修改日志级别**
-1.  创建 `data/set-env` 文件。
-2.  写入 `LOG_LEVEL=DEBUG`。
-3.  启动应用，日志级别将变为 `DEBUG`，该设置会保存到 `data.json`，且 `set-env` 文件会被自动删除。
 
 ## 🚀 部署方式
 

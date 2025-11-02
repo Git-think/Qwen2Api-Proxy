@@ -1,12 +1,7 @@
 const { getLatestModels } = require('../models/models-map.js')
-const loadConfig = require('../config/index.js')
-
-let config;
+const config = require('../config/index.js')
 
 const handleGetModels = async (req, res) => {
-    if (!config) {
-        config = await loadConfig();
-    }
     const models = []
 
     const ModelsMap = await getLatestModels()

@@ -4,12 +4,7 @@ const { setResponseHeaders } = require('./chat.js')
 const accountManager = require('../utils/account.js')
 const { sleep } = require('../utils/tools.js')
 const { generateChatID } = require('../utils/request.js')
-const loadConfig = require('../config/index.js')
-
-let config;
-(async () => {
-    config = await loadConfig();
-})();
+const config = require('../config/index.js')
 
 /**
  * 主要的聊天完成处理函数
@@ -69,7 +64,7 @@ const handleImageVideoCompletion = async (req, res) => {
                     const matches = [...item.content.matchAll(/!\[image\]\((.*?)\)/g)]
                     // 将所有匹配到的图片url添加到图片列表
                     for (const match of matches) {
-                        select_image_list.push(match)
+                        select_image_list.push(match[1])
                     }
                 } else {
                     if (Array.isArray(item.content) && item.content.length > 0) {
@@ -86,22 +81,22 @@ const handleImageVideoCompletion = async (req, res) => {
         //分情况处理
         if (chat_type == 't2i' || chat_type == 't2v') {
             if (Array.isArray(_userPrompt)) {
-                reqBody.messages.content = _userPrompt.map(item => item.type == "text" ? item.text : "").join("\n\n")
+                reqBody.messages[0].content = _userPrompt.map(item => item.type == "text" ? item.text : "").join("\n\n")
             } else {
-                reqBody.messages.content = _userPrompt
+                reqBody.messages[0].content = _userPrompt
             }
         } else if (chat_type == 'image_edit') {
             if (!Array.isArray(_userPrompt)) {
 
                 if (messagesHistory.length === 1) {
-                    reqBody.messages.chat_type = "t2i"
+                    reqBody.messages[0].chat_type = "t2i"
                 } else if (select_image_list.length >= 1) {
-                    reqBody.messages.files.push({
+                    reqBody.messages[0].files.push({
                         "type": "image",
                         "url": select_image_list[select_image_list.length - 1]
                     })
                 }
-                reqBody.messages.content += _userPrompt
+                reqBody.messages[0].content += _userPrompt
             } else {
                 const texts = _userPrompt.filter(item => item.type == "text")
                 if (texts.length === 0) {
@@ -109,17 +104,17 @@ const handleImageVideoCompletion = async (req, res) => {
                 }
                 // 拼接提示词
                 for (const item of texts) {
-                    reqBody.messages.content += item.text
+                    reqBody.messages[0].content += item.text
                 }
 
                 const files = _userPrompt.filter(item => item.type == "image")
                 // 如果图片为空，则设置为t2i
                 if (files.length === 0) {
-                    reqBody.messages.chat_type = "t2i"
+                    reqBody.messages[0].chat_type = "t2i"
                 }
                 // 遍历图片
                 for (const item of files) {
-                    reqBody.messages.files.push({
+                    reqBody.messages[0].files.push({
                         "type": "image",
                         "url": item.image
                     })
@@ -149,7 +144,7 @@ const handleImageVideoCompletion = async (req, res) => {
         logger.info(`选择图片: ${select_image_list[select_image_list.length - 1] || "未选择图片，切换生成图/视频模式"}`, 'CHAT')
         logger.info(`使用提示: ${reqBody.messages[0].content}`, 'CHAT')
         // console.log(JSON.stringify(reqBody))
-        const newChatType = reqBody.messages.chat_type
+        const newChatType = reqBody.messages[0].chat_type
         const response_data = await axios.post(`https://chat.qwen.ai/api/v2/chat/completions?chat_id=${chat_id}`, reqBody, {
             headers: {
                 "Authorization": `Bearer ${token}`,
@@ -169,8 +164,8 @@ const handleImageVideoCompletion = async (req, res) => {
                     const data = decoder.decode(chunk, { stream: true }).split('\n').filter(item => item.trim() != "")
                     for (const item of data) {
                         const jsonObj = JSON.parse(item.replace("data:", '').trim())
-                        if (jsonObj && jsonObj.choices && jsonObj.choices && jsonObj.choices.delta && jsonObj.choices.delta.content.trim() != "" && contentUrl == null) {
-                            contentUrl = jsonObj.choices.delta.content
+                        if (jsonObj && jsonObj.choices && jsonObj.choices[0] && jsonObj.choices[0].delta && jsonObj.choices[0].delta.content.trim() != "" && contentUrl == null) {
+                            contentUrl = jsonObj.choices[0].delta.content
                         }
                     }
                 })
@@ -179,7 +174,7 @@ const handleImageVideoCompletion = async (req, res) => {
                     return returnResponse(res, model, contentUrl, req.body.stream)
                 })
             } else if (newChatType == 'image_edit') {
-                contentUrl = response_data.data?.data?.choices?.message?.content?.image
+                contentUrl = response_data.data?.data?.choices[0]?.message?.content[0]?.image
                 return returnResponse(res, model, contentUrl, req.body.stream)
             } else if (newChatType == 't2v') {
                 return handleVideoCompletion(req, res, response_data.data, token)
@@ -232,7 +227,7 @@ const returnResponse = (res, model, contentUrl, stream) => {
 
 const handleVideoCompletion = async (req, res, response_data, token) => {
     try {
-        const videoTaskID = response_data?.data?.messages?.extra?.wanx?.task_id
+        const videoTaskID = response_data?.data?.messages[0]?.extra?.wanx?.task_id
         if (!response_data || !response_data.success || !videoTaskID) {
             throw new Error()
         }
@@ -263,7 +258,7 @@ const handleVideoCompletion = async (req, res, response_data, token) => {
         for (let i = 0; i < maxAttempts; i++) {
             const content = await getVideoTaskStatus(videoTaskID, token)
             if (content) {
-                returnBody.choices.message.content = `
+                returnBody.choices[0].message.content = `
 <video controls = "controls">
 ${content}
 </video>

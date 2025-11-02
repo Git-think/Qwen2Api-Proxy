@@ -2,14 +2,9 @@ const { isJson, generateUUID } = require('../utils/tools.js')
 const { createUsageObject } = require('../utils/precise-tokenizer.js')
 const { sendChatRequest } = require('../utils/request.js')
 const accountManager = require('../utils/account.js')
-const loadConfig = require('../config/index.js')
+const config = require('../config/index.js')
 const axios = require('axios')
 const { logger } = require('../utils/logger')
-
-let config;
-(async () => {
-    config = await loadConfig();
-})();
 
 /**
  * 设置响应头
@@ -114,19 +109,19 @@ const handleStreamResponse = async (res, response, enable_thinking, enable_web_s
                     }
 
                     // 处理 web_search 信息
-                    if (decodeJson.choices.delta && decodeJson.choices.delta.name === 'web_search') {
-                        web_search_info = decodeJson.choices.delta.extra.web_search_info
+                    if (decodeJson.choices[0].delta && decodeJson.choices[0].delta.name === 'web_search') {
+                        web_search_info = decodeJson.choices[0].delta.extra.web_search_info
                     }
 
-                    if (!decodeJson.choices.delta || !decodeJson.choices.delta.content ||
-                        (decodeJson.choices.delta.phase !== 'think' && decodeJson.choices.delta.phase !== 'answer')) {
+                    if (!decodeJson.choices[0].delta || !decodeJson.choices[0].delta.content ||
+                        (decodeJson.choices[0].delta.phase !== 'think' && decodeJson.choices[0].delta.phase !== 'answer')) {
                         continue
                     }
 
-                    let content = decodeJson.choices.delta.content
+                    let content = decodeJson.choices[0].delta.content
                     completionContent += content // 累计完整内容用于token估算
 
-                    if (decodeJson.choices.delta.phase === 'think' && !thinking_start) {
+                    if (decodeJson.choices[0].delta.phase === 'think' && !thinking_start) {
                         thinking_start = true
                         if (web_search_info) {
                             content = `<think>\n\n${await accountManager.generateMarkdownTable(web_search_info, config.searchInfoMode)}\n\n${content}`
@@ -134,7 +129,7 @@ const handleStreamResponse = async (res, response, enable_thinking, enable_web_s
                             content = `<think>\n\n${content}`
                         }
                     }
-                    if (decodeJson.choices.delta.phase === 'answer' && !thinking_end && thinking_start) {
+                    if (decodeJson.choices[0].delta.phase === 'answer' && !thinking_end && thinking_start) {
                         thinking_end = true
                         content = `\n\n</think>\n${content}`
                     }
@@ -245,7 +240,7 @@ const handleStreamResponse = async (res, response, enable_thinking, enable_web_s
 const handleNonStreamResponse = async (res, response, enable_thinking, enable_web_search, model, requestBody = null) => {
     try {
         // console.log(JSON.stringify(response))
-        const content = response.data.choices.message.content
+        const content = response.data.choices[0].message.content
 
         // 提取prompt文本用于token估算
         let promptText = ''

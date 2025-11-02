@@ -1,12 +1,7 @@
 const express = require('express')
 const router = express.Router()
-const loadConfig = require('../config/index.js')
+const config = require('../config/index.js')
 const { validateApiKey } = require('../middlewares/authorization')
-
-let config;
-(async () => {
-    config = await loadConfig();
-})();
 
 router.post('/verify', (req, res) => {
   const apiKey = req.body.apiKey
