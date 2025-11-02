@@ -1,12 +1,11 @@
 const fs = require('fs').promises;
 const path = require('path');
-const config = require('../config/index.js');
 const { logger } = require('./logger');
 const redis = require('./redis');
 
 class DataPersistence {
     constructor() {
-        this.mode = config.dataSaveMode;
+        this.mode = process.env.DATA_SAVE_MODE || 'none';
         this.filePath = path.join(__dirname, '../../data/data.json');
         this.cache = null;
     }

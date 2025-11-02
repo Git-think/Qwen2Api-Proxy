@@ -18,7 +18,7 @@ class FileConfig {
     async handleReloadEnv() {
         try {
             await fs.access(RELOAD_ENV_FILE);
-            logger.info('检测到 reload-env 文件，正在处理...', 'FILE_CONFIG');
+            logger.info('检测到 reload-env 文件，正在处理...', 'FILE_CONFIG', '📝');
 
             const content = await fs.readFile(RELOAD_ENV_FILE, 'utf8');
             const lines = content.split(/\r?\n/).map(line => line.trim().toLowerCase());
@@ -45,7 +45,7 @@ class FileConfig {
     async handleAdd() {
         try {
             await fs.access(ADD_FILE);
-            logger.info('检测到 add 文件，正在处理...', 'FILE_CONFIG');
+            logger.info('检测到 add 文件，正在处理...', 'FILE_CONFIG', '📝');
             const accountManager = require('./account');
             const content = await fs.readFile(ADD_FILE, 'utf8');
             const lines = content.split(/\r?\n/);
@@ -70,7 +70,7 @@ class FileConfig {
     async handleSetEnv() {
         try {
             await fs.access(SET_ENV_FILE);
-            logger.info('检测到 set-env 文件，正在处理...', 'FILE_CONFIG');
+            logger.info('检测到 set-env 文件，正在处理...', 'FILE_CONFIG', '📝');
 
             const content = await fs.readFile(SET_ENV_FILE, 'utf8');
             const lines = content.split(/\r?\n/);
