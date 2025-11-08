@@ -61,13 +61,15 @@
                             <span class="text-xl">{{ isProxySectionCollapsed ? '▼' : '▲' }}</span>
                         </div>
                         <div v-if="!isProxySectionCollapsed">
-                            <div class="flex items-center gap-2">
-                                <input v-model="newProxyUrl" type="text" placeholder="请输入代理地址"
-                                    class="flex-1 rounded-lg border-gray-300 bg-white shadow-sm h-10 text-sm px-3">
-                                <button @click="addProxy"
-                                    class="bg-green-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-green-600 transition-all">
-                                    + 添加代理
-                                </button>
+                            <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 my-4">
+                                <div class="flex items-center gap-2">
+                                    <input v-model="newProxyUrl" type="text" placeholder="请输入代理地址 (例如: http://user:pass@host:port)"
+                                        class="flex-1 rounded-lg border-gray-300 bg-white shadow-sm h-10 text-sm px-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
+                                    <button @click="addProxy"
+                                        class="bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-green-600 transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5">
+                                        + 添加代理
+                                    </button>
+                                </div>
                             </div>
                             <div v-if="proxyLoading" class="text-gray-500 text-center py-4">
                                 正在加载代理...
