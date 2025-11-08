@@ -18,7 +18,7 @@ const getLatestModels = async (force = false) => {
     
     fetchPromise = axios.get('https://chat.qwen.ai/api/models', {
         headers: {
-            'Authorization': `Bearer ${accountManager.getAccountToken()}`,
+            'Authorization': `Bearer ${accountManager.getNextAccount().token}`,
             'Content-Type': 'application/json',
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             ...(config.ssxmodItna && { 'Cookie': `ssxmod_itna=${config.ssxmodItna};ssxmod_itna2=${config.ssxmodItna2}` })
