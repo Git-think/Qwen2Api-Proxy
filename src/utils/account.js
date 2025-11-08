@@ -608,7 +608,15 @@ class Account {
 
                 if (newAccount) {
                     this.accountTokens.push(newAccount);
-                    await this.dataPersistence.saveAccount(email, newAccount);
+                    // 创建一个只包含可序列化数据的干净对象用于存储
+                    const accountToSave = {
+                        email: newAccount.email,
+                        password: newAccount.password,
+                        token: newAccount.token,
+                        expires: newAccount.expires,
+                        proxy: newAccount.proxy,
+                    };
+                    await this.dataPersistence.saveAccount(email, accountToSave);
                     this.accountRotator.setAccounts(this.accountTokens);
                     logger.success(`成功添加账户: ${email} (使用代理: ${getProxyHost(assignedProxy)})`, 'ACCOUNT');
                     return true;
