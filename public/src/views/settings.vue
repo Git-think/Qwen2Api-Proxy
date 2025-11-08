@@ -56,33 +56,38 @@
                 <div class="setting-card relative overflow-hidden rounded-2xl p-6 flex flex-col gap-4">
                     <div class="absolute inset-0 bg-white/30 backdrop-blur-md border border-white/30 rounded-2xl"></div>
                     <div class="relative flex flex-col gap-4">
-                        <label class="text-gray-700 font-semibold text-lg">🌐 代理管理</label>
-                        <div class="flex items-center gap-2">
-                            <input v-model="newProxyUrl" type="text" placeholder="请输入代理地址"
-                                class="flex-1 rounded-lg border-gray-300 bg-white shadow-sm h-10 text-sm px-3">
-                            <button @click="addProxy"
-                                class="bg-green-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-green-600 transition-all">
-                                + 添加代理
-                            </button>
+                        <div class="flex justify-between items-center cursor-pointer" @click="toggleProxySection">
+                            <label class="text-gray-700 font-semibold text-lg">🌐 代理管理</label>
+                            <span class="text-xl">{{ isProxySectionCollapsed ? '▼' : '▲' }}</span>
                         </div>
-                        <div v-if="proxyLoading" class="text-gray-500 text-center py-4">
-                            正在加载代理...
-                        </div>
-                        <div v-else-if="proxyError" class="text-red-500 text-center py-4">
-                            加载代理失败: {{ proxyError }}
-                        </div>
-                        <div v-else-if="proxies.length === 0" class="text-gray-500 text-center py-4">
-                            暂无代理
-                        </div>
-                        <div v-else v-for="(proxy, index) in proxies" :key="index"
-                            class="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg p-3">
-                            <input :value="proxy.url" type="text" readonly
-                                class="flex-1 rounded-lg border-gray-300 bg-white shadow-sm h-8 text-sm px-3">
-                            <span :class="statusColor(proxy.status)" class="text-xs px-2 py-1 rounded">{{ proxy.status }}</span>
-                            <button @click="deleteProxy(proxy.url)"
-                                class="bg-red-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-red-600 transition-all">
-                                删除
-                            </button>
+                        <div v-if="!isProxySectionCollapsed">
+                            <div class="flex items-center gap-2">
+                                <input v-model="newProxyUrl" type="text" placeholder="请输入代理地址"
+                                    class="flex-1 rounded-lg border-gray-300 bg-white shadow-sm h-10 text-sm px-3">
+                                <button @click="addProxy"
+                                    class="bg-green-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-green-600 transition-all">
+                                    + 添加代理
+                                </button>
+                            </div>
+                            <div v-if="proxyLoading" class="text-gray-500 text-center py-4">
+                                正在加载代理...
+                            </div>
+                            <div v-else-if="proxyError" class="text-red-500 text-center py-4">
+                                加载代理失败: {{ proxyError }}
+                            </div>
+                            <div v-else-if="proxies.length === 0" class="text-gray-500 text-center py-4">
+                                暂无代理
+                            </div>
+                            <div v-else v-for="(proxy, index) in proxies" :key="index"
+                                class="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg p-3">
+                                <input :value="proxy.url" type="text" readonly
+                                    class="flex-1 rounded-lg border-gray-300 bg-white shadow-sm h-8 text-sm px-3">
+                                <span :class="statusColor(proxy.status)" class="text-xs px-2 py-1 rounded">{{ proxy.status }}</span>
+                                <button @click="deleteProxy(proxy.url)"
+                                    class="bg-red-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-red-600 transition-all">
+                                    删除
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -201,6 +206,11 @@ const proxies = ref([])
 const newProxyUrl = ref('')
 const proxyLoading = ref(true)
 const proxyError = ref(null)
+const isProxySectionCollapsed = ref(true)
+
+const toggleProxySection = () => {
+    isProxySectionCollapsed.value = !isProxySectionCollapsed.value
+}
 
 const loadSettings = async () => {
     try {
