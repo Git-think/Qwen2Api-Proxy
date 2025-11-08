@@ -21,7 +21,7 @@ jobs:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -84,15 +84,19 @@ jobs:
             echo "${{ steps.ai_changelog.outputs.body }}" >> $GITHUB_OUTPUT
             echo "EOF" >> $GITHUB_OUTPUT
           else
-            echo "body=Release of version v${{ steps.current_version.outputs.version }}" >> $GITHUB_OUTPUT
+            echo "body<<EOF" >> $GITHUB_OUTPUT
+            echo "## Changelog" >> $GITHUB_OUTPUT
+            echo "" >> $GITHUB_OUTPUT
+            echo "${{ steps.get_commits.outputs.commits }}" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
           fi
 
       - name: Create release
         if: steps.compare_versions.outputs.changed == 'true'
-        uses: actions/create-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.current_version.outputs.version }}
-          release_name: Release v${{ steps.current_version.outputs.version }}
+          name: Release v${{ steps.current_version.outputs.version }}
           body: ${{ steps.set_release_body.outputs.body }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
