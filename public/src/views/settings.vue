@@ -242,7 +242,11 @@ const addProxy = async () => {
         newProxyUrl.value = ''
         await loadProxies()
     } catch (error) {
-        alert('代理添加失败: ' + error.message)
+        if (error.response && error.response.data && error.response.data.error) {
+            alert('代理添加失败: ' + error.response.data.error);
+        } else {
+            alert('代理添加失败: ' + error.message);
+        }
     }
 }
 

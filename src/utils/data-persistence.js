@@ -38,13 +38,40 @@ class DataPersistence {
     }
 
     async _saveData(data) {
-        this.cache = data;
+        // 手动构建一个干净的可序列化对象
+        const dataToSave = {
+            accounts: [],
+            proxyBindings: data.proxyBindings || {},
+            proxyStatuses: data.proxyStatuses || {}
+        };
+
+        // 清理账户数据，只保留可序列化的字段
+        if (data.accounts && Array.isArray(data.accounts)) {
+            dataToSave.accounts = data.accounts.map(acc => {
+                const cleanedAcc = {
+                    email: acc.email,
+                    password: acc.password,
+                    token: acc.token,
+                    expires: acc.expires,
+                    proxy: acc.proxy,
+                    userAgent: acc.userAgent,
+                };
+                // 单独处理 cli_info，移除定时器
+                if (acc.cli_info) {
+                    cleanedAcc.cli_info = { ...acc.cli_info };
+                    delete cleanedAcc.cli_info.refresh_token_interval;
+                }
+                return cleanedAcc;
+            });
+        }
+
+        this.cache = data; // 运行时缓存保持不变
         try {
             if (this.mode === 'file') {
                 await fs.mkdir(path.dirname(this.filePath), { recursive: true });
-                await fs.writeFile(this.filePath, JSON.stringify(data, null, 2), 'utf8');
+                await fs.writeFile(this.filePath, JSON.stringify(dataToSave, null, 2), 'utf8');
             } else if (this.mode === 'redis') {
-                await redis.set('qwen_proxy_data', JSON.stringify(data));
+                await redis.set('qwen_proxy_data', JSON.stringify(dataToSave));
             }
         } catch (error) {
             logger.error('保存数据失败', 'DATA', '', error);
@@ -54,7 +81,6 @@ class DataPersistence {
     _getDefaultData() {
         return {
             accounts: [],
-            proxies: [], // 新增字段
             proxyBindings: {},
             proxyStatuses: {}
         };
@@ -98,19 +124,6 @@ class DataPersistence {
         await this._saveData(data);
     }
 
-    async loadProxies() {
-        const data = await this._getData();
-        return data.proxies || [];
-    }
-
-    async saveProxies(proxies) {
-        const data = await this._getData();
-        // 使用 Set 进行去重和增量添加
-        const existingProxies = new Set(data.proxies || []);
-        proxies.forEach(p => existingProxies.add(p));
-        data.proxies = [...existingProxies];
-        await this._saveData(data);
-    }
 }
 
 module.exports = new DataPersistence();

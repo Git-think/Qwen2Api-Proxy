@@ -40,8 +40,10 @@ class Account {
      */
     async _initialize() {
         try {
-            // 加载来自 data.json 的代理
-            const fileProxies = await this.dataPersistence.loadProxies();
+            // 从 data.json 加载现有的代理状态
+            const savedStatuses = await this.dataPersistence.loadProxyStatuses();
+            const fileProxies = Object.keys(savedStatuses);
+
             // 合并来自环境变量和文件的代理，并去重
             const combinedProxies = [...new Set([...config.socks5Proxies, ...fileProxies])];
 
@@ -51,8 +53,19 @@ class Account {
                 this.proxyManager = new ProxyManager(this.dataPersistence, combinedProxies);
 
                 const savedBindings = await this.dataPersistence.loadProxyBindings();
-                const savedStatuses = await this.dataPersistence.loadProxyStatuses();
-                await this.proxyManager.initialize(savedStatuses, savedBindings);
+                
+                // 创建一个新的状态对象，保留现有状态，并为新代理设置 "untested"
+                const newStatuses = { ...savedStatuses };
+                combinedProxies.forEach(p => {
+                    if (!newStatuses[p]) {
+                        newStatuses[p] = 'untested';
+                    }
+                });
+
+                await this.proxyManager.initialize(newStatuses, savedBindings);
+                
+                // 保存更新后的代理状态
+                await this.dataPersistence.saveProxyStatuses(newStatuses);
             } else {
                 logger.info('未配置 SOCKS5 代理，将直接连接', 'PROXY');
             }

@@ -161,10 +161,32 @@ router.post('/simple-model-map', adminKeyVerify, async (req, res) => {
 
 // Proxy Management
 router.get('/proxies', adminKeyVerify, async (req, res) => {
-  if (!accountManager.proxyManager) {
-    return res.json([]);
+  // 等待 accountManager 初始化完成
+  const waitInitialized = (timeout = 5000) => {
+    return new Promise((resolve, reject) => {
+      const startTime = Date.now();
+      const interval = setInterval(() => {
+        if (accountManager.isInitialized) {
+          clearInterval(interval);
+          resolve();
+        } else if (Date.now() - startTime > timeout) {
+          clearInterval(interval);
+          reject(new Error('Account manager initialization timed out'));
+        }
+      }, 100); // 每 100ms 检查一次
+    });
+  };
+
+  try {
+    await waitInitialized(); // 等待初始化完成
+    if (!accountManager.proxyManager) {
+      return res.json([]);
+    }
+    res.json(accountManager.proxyManager.getProxies());
+  } catch (error) {
+    logger.error('获取代理列表失败，等待初始化超时', 'PROXY', '', error);
+    res.status(500).json({ error: '服务器正在初始化，请稍后再试' });
   }
-  res.json(accountManager.proxyManager.getProxies());
 });
 
 router.post('/addProxy', adminKeyVerify, async (req, res) => {
