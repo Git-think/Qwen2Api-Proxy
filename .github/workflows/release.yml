@@ -44,7 +44,12 @@ jobs:
         id: get_commits
         if: steps.compare_versions.outputs.changed == 'true'
         run: |
-          commits=$(git log v${{ steps.previous_version.outputs.version }}..HEAD --pretty=format:"- %s")
+          latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -z "$latest_tag" ]; then
+            commits=$(git log --pretty=format:"- %s")
+          else
+            commits=$(git log $latest_tag..HEAD --pretty=format:"- %s")
+          fi
           echo "commits<<EOF" >> $GITHUB_OUTPUT
           echo "$commits" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
