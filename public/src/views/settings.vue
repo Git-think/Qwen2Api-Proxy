@@ -52,6 +52,35 @@
                     </div>
                 </div>
 
+                <!-- 代理管理 -->
+                <div class="setting-card relative overflow-hidden rounded-2xl p-6 flex flex-col gap-4">
+                    <div class="absolute inset-0 bg-white/30 backdrop-blur-md border border-white/30 rounded-2xl"></div>
+                    <div class="relative flex flex-col gap-4">
+                        <label class="text-gray-700 font-semibold text-lg">🌐 代理管理</label>
+                        <div class="flex items-center gap-2">
+                            <input v-model="newProxyUrl" type="text" placeholder="请输入代理地址"
+                                class="flex-1 rounded-lg border-gray-300 bg-white shadow-sm h-10 text-sm px-3">
+                            <button @click="addProxy"
+                                class="bg-green-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-green-600 transition-all">
+                                + 添加代理
+                            </button>
+                        </div>
+                        <div v-if="proxies.length === 0" class="text-gray-500 text-center py-4">
+                            暂无代理
+                        </div>
+                        <div v-for="(proxy, index) in proxies" :key="index"
+                            class="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg p-3">
+                            <input :value="proxy.url" type="text" readonly
+                                class="flex-1 rounded-lg border-gray-300 bg-white shadow-sm h-8 text-sm px-3">
+                            <span :class="statusColor(proxy.status)" class="text-xs px-2 py-1 rounded">{{ proxy.status }}</span>
+                            <button @click="deleteProxy(proxy.url)"
+                                class="bg-red-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-red-600 transition-all">
+                                删除
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- 其他设置项 -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <!-- 自动刷新 -->
@@ -162,6 +191,8 @@ const settings = ref({
 
 const showAddKeyModal = ref(false)
 const newApiKey = ref('')
+const proxies = ref([])
+const newProxyUrl = ref('')
 
 const loadSettings = async () => {
     try {
@@ -182,6 +213,60 @@ const loadSettings = async () => {
         settings.value.simpleModelMap = res.data.simpleModelMap
     } catch (error) {
         console.error('加载设置失败:', error)
+    }
+}
+
+const loadProxies = async () => {
+    try {
+        const res = await axios.get('/api/proxies', {
+            headers: {
+                'Authorization': localStorage.getItem('apiKey')
+            }
+        })
+        proxies.value = res.data
+    } catch (error) {
+        console.error('加载代理失败:', error)
+    }
+}
+
+const addProxy = async () => {
+    if (!newProxyUrl.value.trim()) {
+        alert('请输入代理地址')
+        return
+    }
+    try {
+        await axios.post('/api/addProxy', { proxyUrl: newProxyUrl.value.trim() }, {
+            headers: { 'Authorization': localStorage.getItem('apiKey') || '' }
+        })
+        alert('代理添加成功')
+        newProxyUrl.value = ''
+        await loadProxies()
+    } catch (error) {
+        alert('代理添加失败: ' + error.message)
+    }
+}
+
+const deleteProxy = async (proxyUrl) => {
+    if (!confirm('确定要删除此代理吗？')) return
+    try {
+        await axios.post('/api/deleteProxy', { proxyUrl }, {
+            headers: { 'Authorization': localStorage.getItem('apiKey') || '' }
+        })
+        alert('代理删除成功')
+        await loadProxies()
+    } catch (error) {
+        alert('代理删除失败: ' + error.message)
+    }
+}
+
+const statusColor = (status) => {
+    switch (status) {
+        case 'available':
+            return 'bg-green-200 text-green-800'
+        case 'failed':
+            return 'bg-red-200 text-red-800'
+        default:
+            return 'bg-gray-200 text-gray-800'
     }
 }
 

@@ -152,6 +152,43 @@ class ProxyManager {
     }
     await this.dataPersistence.saveProxyStatuses(statuses);
   }
+
+  addProxy(proxyUrl) {
+    if (this.proxies.has(proxyUrl)) {
+      return false; // Proxy already exists
+    }
+    this.proxies.set(proxyUrl, {
+      url: proxyUrl,
+      status: 'untested',
+      assignedAccounts: new Set(),
+    });
+    this.persistStatuses();
+    return true;
+  }
+
+  removeProxy(proxyUrl) {
+    if (!this.proxies.has(proxyUrl)) {
+      return false; // Proxy not found
+    }
+    // Unassign accounts first
+    const proxyData = this.proxies.get(proxyUrl);
+    proxyData.assignedAccounts.forEach(email => {
+      this.proxyAssignment.delete(email);
+      this.dataPersistence.saveProxyBinding(email, null); // Or remove the binding
+    });
+
+    this.proxies.delete(proxyUrl);
+    this.persistStatuses();
+    return true;
+  }
+
+  getProxies() {
+    return Array.from(this.proxies.values()).map(p => ({
+      url: p.url,
+      status: p.status,
+      assignedAccounts: Array.from(p.assignedAccounts),
+    }));
+  }
 }
 
 module.exports = ProxyManager;

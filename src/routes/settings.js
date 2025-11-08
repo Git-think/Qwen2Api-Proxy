@@ -3,6 +3,7 @@ const router = express.Router()
 const config = require('../config')
 const { apiKeyVerify, adminKeyVerify } = require('../middlewares/authorization')
 const { logger } = require('../utils/logger')
+const accountManager = require('../utils/account')
 
 
 router.get('/settings', adminKeyVerify, async (req, res) => {
@@ -157,5 +158,45 @@ router.post('/simple-model-map', adminKeyVerify, async (req, res) => {
     res.status(500).json({ error: error.message })
   }
 })
+
+// Proxy Management
+router.get('/proxies', adminKeyVerify, async (req, res) => {
+  if (!accountManager.proxyManager) {
+    return res.json([]);
+  }
+  res.json(accountManager.proxyManager.getProxies());
+});
+
+router.post('/addProxy', adminKeyVerify, async (req, res) => {
+  const { proxyUrl } = req.body;
+  if (!proxyUrl) {
+    return res.status(400).json({ error: 'Proxy URL is required' });
+  }
+  if (!accountManager.proxyManager) {
+    return res.status(500).json({ error: 'Proxy manager is not initialized' });
+  }
+  const success = accountManager.proxyManager.addProxy(proxyUrl);
+  if (success) {
+    res.json({ message: 'Proxy added successfully' });
+  } else {
+    res.status(409).json({ error: 'Proxy already exists' });
+  }
+});
+
+router.post('/deleteProxy', adminKeyVerify, async (req, res) => {
+  const { proxyUrl } = req.body;
+  if (!proxyUrl) {
+    return res.status(400).json({ error: 'Proxy URL is required' });
+  }
+  if (!accountManager.proxyManager) {
+    return res.status(500).json({ error: 'Proxy manager is not initialized' });
+  }
+  const success = accountManager.proxyManager.removeProxy(proxyUrl);
+  if (success) {
+    res.json({ message: 'Proxy removed successfully' });
+  } else {
+    res.status(404).json({ error: 'Proxy not found' });
+  }
+});
 
 module.exports = router

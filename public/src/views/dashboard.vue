@@ -2,7 +2,7 @@
   <div class="w-100vw h-100vh p-4 overflow-y-auto">
     <div class="container mx-auto">
       <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 px-4 space-y-4 md:space-y-0 pt-5">
-        <h1 class="text-4xl font-bold">Token Manager <span class="text-gray-500 text-sm">by 兜豆子</span></h1>
+        <h1 class="text-4xl font-bold">Token Manager <span class="text-gray-500 text-sm">by Git-think</span></h1>
         <div class="flex flex-col sm:flex-row w-full md:w-auto space-y-3 sm:space-y-0 sm:space-x-2 lg:space-x-4">
           <button @click="showAddModal = true"
                   class="action-button font-bold border border-green-200 bg-green-50 text-green-900 px-4 py-2 rounded-xl shadow-sm hover:bg-green-100 hover:border-green-400 transition-all duration-300 transform hover:-translate-y-1 active:translate-y-0">
