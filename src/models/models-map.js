@@ -16,9 +16,15 @@ const getLatestModels = async (force = false) => {
         return fetchPromise
     }
     
+    const account = accountManager.getNextAccount();
+    if (!account) {
+        console.error('No account available to fetch latest models.');
+        return Promise.resolve([]);
+    }
+
     fetchPromise = axios.get('https://chat.qwen.ai/api/models', {
         headers: {
-            'Authorization': `Bearer ${accountManager.getNextAccount().token}`,
+            'Authorization': `Bearer ${account.token}`,
             'Content-Type': 'application/json',
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             ...(config.ssxmodItna && { 'Cookie': `ssxmod_itna=${config.ssxmodItna};ssxmod_itna2=${config.ssxmodItna2}` })
